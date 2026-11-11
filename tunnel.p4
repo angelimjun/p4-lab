@@ -2,7 +2,7 @@
  *
  * As supplied, this program forwards IPv4 by longest-prefix match. The tunnel header, its
  * table and its action are already declared; Steps 4–6 of the lab connect them to the
- * parser, the ingress control and the deparser. Look for the TODO comments.
+ * parser, the ingress control and the deparser. The tunnel parser, ingress control and deparser are implemented.
  */
 #include <core.p4>
 #include <v1model.p4>
@@ -67,7 +67,6 @@ parser MyParser(packet_in packet,
         }
     }
 
-    // TODO (Step 4): add the parse_myTunnel state here
 
      state parse_myTunnel {
         packet.extract(hdr.myTunnel);
@@ -128,7 +127,6 @@ control MyIngress(inout headers hdr,
     }
 
     apply {
-        // TODO (Step 5): tunnelled packets should use myTunnel_exact instead
         if (hdr.myTunnel.isValid()) {
         myTunnel_exact.apply();
     } else if (hdr.ipv4.isValid()) {

@@ -1,0 +1,15 @@
+C5: Mixed-version forwarding loop
+s1: new tunnel.p4
+s2: old tunnel_v1.p4
+Tunnel dst_id: 3
+Initial hop_limit: 8
+
+First measurement:
+s1: 14268 log lines
+s2: 14182 log lines
+
+Second measurement (approximately 5 seconds later):
+s1: 14268 log lines
+s2: 14182 log lines
+
+Result: Counts remained unchanged. The s1 log shows seven hop-limit decrements followed by mark_to_drop and Dropping packet at the end of ingress.

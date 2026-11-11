@@ -32,8 +32,11 @@ I modified the forwarding rule on s2 so that packets with
 
 The packet continued looping between s1 and s2.
 
-The switch logs recorded more than 1,300 packet-processing
-events on each switch, demonstrating the forwarding loop.
+The switch logs contained 568 lines for s1 and 566 lines
+for s2 during the loop experiment. These repeated log entries
+provide evidence of continuous forwarding activity between
+the switches. The values are log-line counts, not exact
+packet-forwarding counts.
 
 Evidence: `assignment/evidence/loop-before.txt`
 
@@ -44,8 +47,8 @@ the updated P4 program.
 
 The test packet was sent with `hop_limit=8`.
 
-After waiting 5 seconds, the packet-processing counters
-remained unchanged:
+The switch log-line counts remained unchanged
+between measurements approximately 5 seconds apart:
 
 - s1: 328
 - s2: 326
@@ -60,8 +63,20 @@ Evidence: `assignment/evidence/loop-after.txt`
 The updated program successfully delivered a tunnel packet
 to h2 with `dst_id=2` and a remaining `hop_limit=6`.
 
-Normal IPv4 forwarding was also tested to ensure that
-ordinary network communication continued working.
+A tunnel packet was also successfully delivered to h3
+with `dst_id=3` and a remaining `hop_limit=6`.
+
+Both tunnel delivery tests started with `hop_limit=8`,
+confirming that the two switches decremented the hop limit.
+
+Normal IPv4 forwarding was tested using three ICMP
+echo requests from h1 to h2. All three replies were
+received, with 0% packet loss.
+
+Evidence:
+- `assignment/evidence/delivery-h2.txt`
+- `assignment/evidence/delivery-h3.txt`
+- `assignment/evidence/ipv4-ping.txt`
 
 ## 4. C5: Mixed-Version Rollout
 
@@ -100,6 +115,38 @@ This shows that changing a packet header format can create
 compatibility problems during a mixed-version rollout.
 
 Evidence: `assignment/evidence/mixed-capture.txt`
+
+### Mixed-Version Forwarding Loop Test
+
+I also tested a forwarding loop with s1 running the new
+`tunnel.p4` and s2 running the old `tunnel_v1.p4`.
+
+I modified the s2 forwarding rule for `dst_id=3` to use
+port 1, sending the packet back to s1.
+
+I sent a tunnel packet with an initial `hop_limit=8`.
+
+The s1 log showed seven hop-limit decrements followed by
+`mark_to_drop` and `Dropping packet at the end of ingress`.
+
+The switch log-line counts were:
+
+| Switch | First measurement | Second measurement |
+|---|---:|---:|
+| s1 | 14268 | 14268 |
+| s2 | 14182 | 14182 |
+
+The counts remained unchanged between measurements.
+
+This confirms that the upgraded s1 dropped the looping
+packet even though s2 was running the old P4 program.
+
+However, the earlier delivery test showed that mixed-version
+operation still caused a tunnel-header compatibility problem.
+
+Evidence:
+- `assignment/evidence/mixed-loop.txt`
+- `assignment/evidence/mixed-loop-s1.txt`
 
 ## 5. Safe Rollout Strategies
 
