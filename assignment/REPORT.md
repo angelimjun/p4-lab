@@ -74,9 +74,11 @@ echo requests from h1 to h2. All three replies were
 received, with 0% packet loss.
 
 Evidence:
+- `assignment/evidence/delivery.txt` (combined tunnel delivery evidence)
 - `assignment/evidence/delivery-h2.txt`
 - `assignment/evidence/delivery-h3.txt`
 - `assignment/evidence/ipv4-ping.txt`
+- `assignment/evidence/ipv4-ping-h3.txt` (IPv4 ping to h3)
 
 ## 4. C5: Mixed-Version Rollout
 
@@ -114,7 +116,9 @@ header misalignment.
 This shows that changing a packet header format can create
 compatibility problems during a mixed-version rollout.
 
-Evidence: `assignment/evidence/mixed-capture.txt`
+Evidence:
+- `assignment/evidence/mixed.txt` (combined C5 evidence)
+- `assignment/evidence/mixed-capture.txt`
 
 ### Mixed-Version Forwarding Loop Test
 
