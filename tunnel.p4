@@ -1,8 +1,7 @@
-/* Week 5 lab — IPv4 forwarding, plus a custom tunnel header that you will finish.
+/* Week 5 lab — IPv4 forwarding with a custom tunnel header.
  *
- * As supplied, this program forwards IPv4 by longest-prefix match. The tunnel header, its
- * table and its action are already declared; Steps 4–6 of the lab connect them to the
- * parser, the ingress control and the deparser. The tunnel parser, ingress control and deparser are implemented.
+ * This program supports IPv4 longest-prefix-match forwarding and
+ * tunnel forwarding with a hop limit to prevent forwarding loops.
  */
 #include <core.p4>
 #include <v1model.p4>
@@ -68,7 +67,7 @@ parser MyParser(packet_in packet,
     }
 
 
-     state parse_myTunnel {
+    state parse_myTunnel {
         packet.extract(hdr.myTunnel);
         transition select(hdr.myTunnel.proto_id) {
             TYPE_IPV4: parse_ipv4;
@@ -111,13 +110,13 @@ control MyIngress(inout headers hdr,
     }
 
     action myTunnel_forward(egressSpec_t port) {
-    if (hdr.myTunnel.hop_limit <= 1) {
-        drop();
-    } else {
-        hdr.myTunnel.hop_limit = hdr.myTunnel.hop_limit - 1;
-        standard_metadata.egress_spec = port;
+        if (hdr.myTunnel.hop_limit <= 1) {
+            drop();
+        } else {
+            hdr.myTunnel.hop_limit = hdr.myTunnel.hop_limit - 1;
+            standard_metadata.egress_spec = port;
+        }
     }
-}
 
     table myTunnel_exact {
         key = { hdr.myTunnel.dst_id: exact; }
@@ -128,13 +127,13 @@ control MyIngress(inout headers hdr,
 
     apply {
         if (hdr.myTunnel.isValid()) {
-        myTunnel_exact.apply();
-    } else if (hdr.ipv4.isValid()) {
-        ipv4_lpm.apply();
-    } else {
-        drop();
+            myTunnel_exact.apply();
+        } else if (hdr.ipv4.isValid()) {
+            ipv4_lpm.apply();
+        } else {
+            drop();
+        }
     }
-}
 }
 
 /*************************** EGRESS ***************************/
