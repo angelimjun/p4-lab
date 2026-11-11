@@ -1,62 +1,212 @@
-# Week 5 assignment — Put a limit on the tunnel
+# P4 Tunnel Hop-Limit Assignment
 
-Student ID (last 4 digits only): **NNNN**
+## 1. Objective
 
-Write each section in your own words, about your own runs. Quote the evidence files in
-`assignment/evidence/` that support each point. Delete the instructions in `<!-- -->` as you go.
+The objective of this assignment is to prevent packets from
+looping indefinitely in a P4 programmable network by adding
+a hop-limit mechanism to the custom tunnel header.
 
-## 1. Analysis: the loop
+## 2. Implementation
 
-<!-- How did you create the tunnel loop (which entry, on which switch, which commands)?
-     What did the switch logs show over time, with numbers from loop-before.txt?
-     Then look at the IPv4 path in tunnel.p4: it decrements the TTL. Does that stop an IPv4
-     loop in this program? Check the code, and explain what happens when TTL reaches 0. -->
+I added an 8-bit `hop_limit` field to the `myTunnel_t` header
+in `tunnel.p4`.
 
-## 2. Design: the hop limit
+The forwarding action checks the hop limit before forwarding:
 
-<!-- Your header change and your pipeline change, and the reason for each choice:
-     - the field's size, and where in the header you put it (and why there);
-     - the starting value send.py uses, and how you chose it;
-     - where it's decremented, and what happens when it runs out;
-     - what else had to change for every part of the path to agree (parser, deparser, hosts). -->
+- If `hop_limit <= 1`, the packet is dropped.
+- Otherwise, `hop_limit` is decreased by 1 and the packet
+  is forwarded to the selected port.
 
-## 3. Implementation
+I also updated `send.py` to support the `--hops` argument,
+with a default value of 8.
 
-<!-- Summarise what you changed in tunnel.p4, send.py and receive.py. The pull request shows
-     the code itself: here, explain anything a reviewer might not see from the diff alone. -->
+The `receive.py` program was updated to recognize and
+display the hop-limit field.
 
-## 4. Evidence: it works
+## 3. Testing
 
-<!-- Show, with your evidence files:
-     - tunnelled delivery to h2 and h3, and the hop limit the receivers saw (delivery.txt);
-     - plain IPv4 still works (delivery.txt);
-     - the same loop as in section 1 now ends, and after how many passes — does that match
-       your design? (loop-after.txt) -->
+### C1: Forwarding Loop Without Hop Limit
 
-## 5. Evaluation
+I modified the forwarding rule on s2 so that packets with
+`dst_id=3` were sent back to s1 instead of h3.
 
-<!-- a) The mixed rollout (mixed.txt): what did you predict before running s1 with your new
-        program and s2 with tunnel_v1.p4? What actually happened to delivery, and to the loop?
-        Explain every difference from your prediction, byte by byte if you need to.
-     b) Propose a safe way to roll out a header change across a network of switches that can't
-        all be upgraded at once. Compare at least two options (for example a version field, a
-        new EtherType, or ordering fields so old switches still parse them).
-     c) Loop protection in the data plane (this hop limit) versus the control plane (Week 3's
-        check_paths()): what can each catch that the other can't? Why do real networks use both?
-     d) What would this change cost on a hardware switch running at line rate? -->
+The packet continued looping between s1 and s2.
 
-## AI use
+The switch logs contained 568 lines for s1 and 566 lines
+for s2 during the loop experiment. These repeated log entries
+provide evidence of continuous forwarding activity between
+the switches. The values are log-line counts, not exact
+packet-forwarding counts.
 
-<!-- This assignment is Level 3 (Open): AI use is allowed if you declare it. State which tools you
-     used (or "None") and what each did — for example "ChatGPT explained the bmv2 log format;
-     the first draft of the hop-limit check came from Copilot, which I then changed and tested".
-     Be ready to explain any part of your work yourself. -->
+Evidence: `assignment/evidence/loop-before.txt`
 
-## Evidence files
+### C4: Forwarding Loop With Hop Limit
 
-| File | What it shows |
-|---|---|
-| `evidence/loop-before.txt` | The loop with your finished lab program: pass counts growing |
-| `evidence/delivery.txt` | Tunnelled delivery with the hop limit, and a plain ping |
-| `evidence/loop-after.txt` | The same loop with your hop limit: pass counts that stop |
-| `evidence/mixed.txt` | The mixed rollout: s1 new, s2 old |
+I repeated the same forwarding-loop experiment using
+the updated P4 program.
+
+The test packet was sent with `hop_limit=8`.
+
+The switch log-line counts remained unchanged
+between measurements approximately 5 seconds apart:
+
+- s1: 328
+- s2: 326
+
+This shows that the packet was no longer looping continuously,
+consistent with the hop-limit protection working correctly.
+
+Evidence: `assignment/evidence/loop-after.txt`
+
+### Normal Forwarding
+
+The updated program successfully delivered a tunnel packet
+to h2 with `dst_id=2` and a remaining `hop_limit=6`.
+
+A tunnel packet was also successfully delivered to h3
+with `dst_id=3` and a remaining `hop_limit=6`.
+
+Both tunnel delivery tests started with `hop_limit=8`,
+confirming that the two switches decremented the hop limit.
+
+Normal IPv4 forwarding was tested using three ICMP
+echo requests from h1 to h2. All three replies were
+received, with 0% packet loss.
+
+Evidence:
+- `assignment/evidence/delivery.txt` (combined tunnel delivery evidence)
+- `assignment/evidence/delivery-h2.txt`
+- `assignment/evidence/delivery-h3.txt`
+- `assignment/evidence/ipv4-ping.txt`
+- `assignment/evidence/ipv4-ping-h3.txt` (IPv4 ping to h3)
+
+## 4. C5: Mixed-Version Rollout
+
+I tested a mixed-version topology:
+
+- s1 used the new `tunnel.p4` with hop limit.
+- s2 used the old `tunnel_v1.p4` without hop limit.
+
+### Prediction
+
+I predicted that the old switch might interpret the new
+tunnel packet incorrectly because of the extra 8-bit field.
+
+### Observation
+
+Normal IPv4 ping succeeded with 0% packet loss.
+
+The old s2 matched the tunnel forwarding rule for `dst_id=2`
+and transmitted the packet through port 2.
+
+However, the h2 receiver application did not report the packet.
+
+A tcpdump capture confirmed that the packet reached h2.
+The captured bytes included `0800 0002 07 45`, where:
+
+- `0800` is the protocol ID.
+- `0002` is the destination ID.
+- `07` is the remaining hop limit.
+- `45` is the beginning of the IPv4 header.
+
+The old switch expected IPv4 immediately after `dst_id`.
+Therefore, it interpreted the packet with a one-byte
+header misalignment.
+
+This shows that changing a packet header format can create
+compatibility problems during a mixed-version rollout.
+
+Evidence:
+- `assignment/evidence/mixed.txt` (combined C5 evidence)
+- `assignment/evidence/mixed-capture.txt`
+
+### Mixed-Version Forwarding Loop Test
+
+I also tested a forwarding loop with s1 running the new
+`tunnel.p4` and s2 running the old `tunnel_v1.p4`.
+
+I modified the s2 forwarding rule for `dst_id=3` to use
+port 1, sending the packet back to s1.
+
+I sent a tunnel packet with an initial `hop_limit=8`.
+
+The s1 log showed seven hop-limit decrements followed by
+`mark_to_drop` and `Dropping packet at the end of ingress`.
+
+The switch log-line counts were:
+
+| Switch | First measurement | Second measurement |
+|---|---:|---:|
+| s1 | 14268 | 14268 |
+| s2 | 14182 | 14182 |
+
+The counts remained unchanged between measurements.
+
+This confirms that the upgraded s1 dropped the looping
+packet even though s2 was running the old P4 program.
+
+However, the earlier delivery test showed that mixed-version
+operation still caused a tunnel-header compatibility problem.
+
+Evidence:
+- `assignment/evidence/mixed-loop.txt`
+- `assignment/evidence/mixed-loop-s1.txt`
+
+## 5. Safe Rollout Strategies
+
+### Strategy 1: Coordinated Update
+
+Update both switches to the new P4 program together.
+
+This reduces the time when incompatible versions are running,
+but packets in transit may still be affected during the update.
+
+### Strategy 2: Versioned Tunnel Header
+
+Add a version identifier and support both old and new tunnel
+formats during migration.
+
+This allows switches to recognize different packet formats,
+but requires additional parsing and forwarding logic.
+
+## 6. Data Plane vs. Control Plane
+
+The hop-limit mechanism works in the data plane.
+Each switch checks and decreases the hop limit as packets
+pass through it.
+
+The Week 3 `check_paths()` approach works in the control plane.
+It checks network paths before forwarding rules are installed.
+
+Control-plane checking can prevent incorrect configurations,
+while the data-plane hop limit provides protection when
+forwarding loops still occur.
+
+Both approaches can be used together.
+
+## 7. Hardware Trade-offs
+
+An 8-bit hop limit adds one byte to each tunnel packet.
+
+Each switch must also perform a comparison and subtraction
+before forwarding.
+
+These operations are simple, but they still use processing
+resources in the programmable data plane.
+
+The benefit is that forwarding loops can be stopped without
+waiting for the control plane to detect and correct them.
+
+## 8. AI Assistance Declaration
+
+I used ChatGPT (OpenAI) as a learning and coding assistant
+during this assignment.
+
+AI assistance included explaining the P4 tunnel implementation,
+suggesting code changes for the hop-limit mechanism, guiding
+the Mininet tests, interpreting switch logs and packet captures,
+and helping organize and draft this report.
+
+I ran the commands, tested the implementation, and reviewed
+the observed results. The report describes the results obtained
+from my experiments.

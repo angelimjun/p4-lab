@@ -1,0 +1,11 @@
+C5 Mixed-Version Rollout Prediction
+
+s1 runs the new tunnel.p4 program with an 8-bit hop_limit field.
+s2 runs the old tunnel_v1.p4 program without hop_limit.
+
+I predict that the old s2 may not process the new tunnel packet correctly.
+The new packet contains an extra 8-bit hop_limit field before the IPv4 header.
+The old parser expects the IPv4 header immediately after dst_id, so it may
+interpret the packet incorrectly or drop it.
+
+I will test this prediction by sending a tunnel packet and checking the logs.

@@ -1,0 +1,7 @@
+C4: Hop-limit loop test
+Packet: dst_id=3, initial hop_limit=8
+s2 forwarding changed from port 3 to port 1
+
+Counters after waiting 5 seconds:
+logs/s1.txt:328
+logs/s2.txt:326

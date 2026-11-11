@@ -1,0 +1,26 @@
+C5 Mixed-Version Rollout Analysis
+
+Prediction:
+The old switch may incorrectly process packets using the new tunnel format,
+because the new format contains an additional 8-bit hop_limit field.
+
+Observation:
+Normal IPv4 ping succeeded with 0% packet loss.
+The old s2 matched dst_id=2 and transmitted the tunnel packet through port 2.
+Tcpdump on h2 confirmed that the tunnel packet arrived, but the receiver
+application did not report receiving it.
+
+The captured bytes showed the tunnel fields followed by 07 45.
+07 was the remaining hop_limit and 45 was the start of the IPv4 header.
+The old switch expected IPv4 immediately after dst_id, causing a one-byte
+header misalignment.
+
+Conclusion:
+The mixed-version rollout created a tunnel-format compatibility problem.
+The old switch forwarded the packet but interpreted its IPv4 header incorrectly.
+
+Safe Rollout Strategies:
+1. Coordinated update: Update both switches to the new format together,
+   minimizing the period when incompatible versions coexist.
+2. Versioned tunnel header: Add protocol versioning and compatible parsers
+   so switches can distinguish old and new tunnel formats during migration.
